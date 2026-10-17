@@ -1,0 +1,40 @@
+{
+  "name": "studyspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "StudySpace \u2014 a production-minded study collaboration platform.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "npm run build --workspace @studyspace/shared && npm run dev --workspace @studyspace/web",
+    "dev:api": "npm run build --workspace @studyspace/shared && npm run dev --workspace @studyspace/api",
+    "build": "npm run build --workspace @studyspace/shared && npm run build --workspace @studyspace/api && npm run build --workspace @studyspace/web",
+    "build:web": "npm run build --workspace @studyspace/web",
+    "build:api": "npm run build --workspace @studyspace/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "playwright test",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",
+    "test:integration": "vitest run tests/integration",
+    "db:push": "supabase db push",
+    "db:test": "supabase test db"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.2",
+    "eslint": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "^8.8.0",
+    "@typescript-eslint/parser": "^8.8.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.12",
+    "@playwright/test": "^1.47.2"
+  }
+}
