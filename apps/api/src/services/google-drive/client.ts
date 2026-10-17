@@ -1,9 +1,14 @@
 import { Readable } from 'node:stream';
-import { google } from 'googleapis';
+// googleapis is a CommonJS package. Importing it as a namespace and
+// destructuring is the reliable form under Node's ESM loader — a direct named
+// import ('{ google }') can fail at runtime with "Named export not found".
+import googleapis from 'googleapis';
 import { env, driveConfigured } from '../../config/env.js';
 import { logger } from '../../lib/logger.js';
 import { ApiError } from '../../utils/errors.js';
 import { mapDriveError } from './errors.js';
+
+const { google } = googleapis as { google: any };
 
 /**
  * Central Google Drive storage.

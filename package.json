@@ -18,7 +18,7 @@
     "build": "npm run build --workspace @studyspace/shared && npm run build --workspace @studyspace/api && npm run build --workspace @studyspace/web",
     "build:web": "npm run build --workspace @studyspace/web",
     "build:api": "npm run build --workspace @studyspace/api",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build --workspace @studyspace/shared && npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "playwright test",
