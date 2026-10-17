@@ -5,51 +5,51 @@ import { z } from 'zod';
  * Server configuration. Every secret lives here and ONLY here — none of these
  * names may be prefixed VITE_ or shipped to the browser.
  *
- * Only the core Supabase values are required, so the container can boot and
- * serve the app before the owner has finished the (offline) Google Drive
- * setup. Missing Drive credentials degrade file features with a clear error
- * rather than preventing startup.
+ * Supabase is *validated* when present but not required to boot: a server with
+ * no database credentials still starts and serves the app with an honest
+ * "not configured" state, instead of crash-looping on a hosting platform. Real
+ * readiness is reported separately by GET /api/health/ready.
  */
+const optionalStr = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional());
+const optionalUrl = z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional());
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8787),
 
-  // --- Required -------------------------------------------------------------
-  SUPABASE_URL: z.string().url(),
+  // --- Supabase ------------------------------------------------------------
+  // Required for the app to actually function; optional to start.
+  SUPABASE_URL: optionalUrl,
   // Privileged: bypasses RLS. Never expose to the client.
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
+  SUPABASE_SERVICE_ROLE_KEY: optionalStr,
+  // Public: served to the browser via GET /api/v1/config.
+  SUPABASE_ANON_KEY: optionalStr,
 
-  // --- Public config served to the browser at runtime ------------------------
-  // Safe to expose: protected by RLS. Served via GET /api/v1/config so the
-  // frontend does not need these at build time.
-  SUPABASE_ANON_KEY: z.string().min(20).optional(),
+  // --- Google Drive (optional; required only for file features) -------------
+  GOOGLE_CLIENT_ID: optionalStr,
+  GOOGLE_CLIENT_SECRET: optionalStr,
+  GOOGLE_REDIRECT_URI: optionalStr,
+  GOOGLE_REFRESH_TOKEN: optionalStr,
+  GOOGLE_DRIVE_ROOT_FOLDER_ID: optionalStr,
 
-  // --- Google Drive (optional; required only for file features) --------------
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_REDIRECT_URI: z.string().optional(),
-  GOOGLE_REFRESH_TOKEN: z.string().optional(),
-  GOOGLE_DRIVE_ROOT_FOLDER_ID: z.string().optional(),
-
-  // --- Serving / CORS --------------------------------------------------------
+  // --- Serving / CORS ------------------------------------------------------
   FRONTEND_ORIGIN: z.string().default('http://localhost:5173'),
-  ALLOWED_ORIGINS: z.string().optional(),
-  // Where the built SPA lives, when this process also serves the frontend.
-  SERVE_WEB_DIR: z.string().optional(),
+  ALLOWED_ORIGINS: optionalStr,
+  SERVE_WEB_DIR: optionalStr,
 });
 
 const parsed = schema.safeParse(process.env);
 
 if (!parsed.success) {
-  const missing = parsed.error.issues
-    .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
-    .join('\n');
-  console.error(`\nStudySpace API cannot start — invalid environment:\n${missing}\n`);
-  console.error('Copy .env.example to .env and fill in the required values.\n');
+  const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+  console.error(`\nStudySpace API cannot start — invalid environment:\n${issues}\n`);
   process.exit(1);
 }
 
 export const env = parsed.data;
+
+/** True when the database credentials are present. */
+export const dbConfigured = Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
 
 /** True when all Google Drive credentials are present. */
 export const driveConfigured = Boolean(

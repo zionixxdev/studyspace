@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { env, driveConfigured } from '../config/env.js';
+import { env, driveConfigured, dbConfigured } from '../config/env.js';
 
 export const configRouter = Router();
 
@@ -16,7 +16,9 @@ configRouter.get('/config', (_req, res) => {
     supabaseAnonKey: env.SUPABASE_ANON_KEY ?? null,
     apiBaseUrl: '/api/v1',
     features: {
-      // Lets the UI hide file actions honestly when Drive is not set up yet.
+      // Let the UI report honestly when a dependency is not set up yet,
+      // instead of offering controls that would fail.
+      db: dbConfigured,
       drive: driveConfigured,
     },
   });

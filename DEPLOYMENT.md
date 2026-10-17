@@ -47,6 +47,35 @@ The important thing to understand first:
    confirmation and password-reset links come back to the right place.
 7. **Smoke-test** using the checklist at the bottom of this file.
 
+### The two warnings AntiDeploy raises
+
+**"Data loss: Uploaded files will be lost."** — Not applicable here. StudySpace
+stores files in **Google Drive**, not on the app's disk. The only thing written
+locally is a temporary staging file during an upload, which is deleted as soon
+as the bytes reach Drive. You do **not** need the S3 bucket it offers.
+
+**"Exposed: Check your Supabase Row Level Security."** — Correct in general, and
+worth taking seriously. It cannot see your policies from the outside, so it
+warns by default. StudySpace's migrations **do** enable RLS on every table
+(`supabase/migrations/0002_rls.sql`). The catch is that they must actually be
+applied — an empty Supabase project has no tables *and* no policies. Run
+`supabase db push` (or paste the three migration files in order) before sharing
+the URL, and confirm with `supabase test db`, which asserts that cross-user
+reads are denied.
+
+### Booting without credentials
+
+The server starts even when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are
+unset, and serves a setup screen that names exactly which variables are missing.
+This keeps a hosting platform from entering a restart loop. It is not a silent
+success:
+
+- `GET /api/health` (liveness) returns `ok` — the process is up.
+- `GET /api/health/ready` (readiness) returns **503** with
+  `{"database":"not_configured"}` until Supabase is configured.
+- `GET /api/v1/config` reports `features.db: false`, and the UI shows the setup
+  screen instead of a login form.
+
 ### Why no build-time secrets
 
 The frontend reads its Supabase configuration from `GET /api/v1/config` at

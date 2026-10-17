@@ -10,10 +10,12 @@
  * development and static-only hosting still work.
  */
 export interface RuntimeConfig {
+  /** True when the API supplied this config (vs. build-time fallback). */
+  loadedFromApi?: boolean;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   apiBaseUrl?: string;
-  features?: { drive?: boolean };
+  features?: { db?: boolean; drive?: boolean };
 }
 
 declare global {
@@ -29,12 +31,15 @@ export async function loadRuntimeConfig(): Promise<void> {
   try {
     const res = await fetch(`${base}/config`, { headers: { Accept: 'application/json' } });
     if (!res.ok) return;
-    const cfg = (await res.json()) as Partial<RuntimeConfig> & { features?: { drive?: boolean } };
+    const cfg = (await res.json()) as Partial<RuntimeConfig> & { features?: { db?: boolean; drive?: boolean } };
     window.__STUDYSPACE__ = {
       supabaseUrl: cfg.supabaseUrl ?? undefined,
       supabaseAnonKey: cfg.supabaseAnonKey ?? undefined,
       apiBaseUrl: cfg.apiBaseUrl ?? undefined,
       features: cfg.features,
+      // Record that the API answered, so the UI can tell the user whether to
+      // fix server env vars or a local .env file.
+      loadedFromApi: true,
     };
   } catch {
     // Offline, or the API is not up yet: fall back to build-time values.
