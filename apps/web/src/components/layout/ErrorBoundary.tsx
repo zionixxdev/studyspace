@@ -7,18 +7,18 @@ interface State {
 
 /** Catches render errors so one broken screen does not blank the whole app. */
 export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
-  state: State = { error: null };
+  override state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     // Log locally only; never send private content to a third party.
     console.error('Unhandled UI error', error, info.componentStack);
   }
 
-  render() {
+  override render() {
     if (this.state.error) {
       return (
         <div className="grid min-h-screen place-items-center p-6">
