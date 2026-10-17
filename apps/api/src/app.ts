@@ -30,15 +30,29 @@ export function createApp() {
     }),
   );
   app.use(
-    cors({
-      origin(origin, cb) {
-        // Allow same-origin/no-origin (server-to-server, curl) and the allow-list.
-        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-        cb(new Error('Not allowed by CORS'));
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Authorization', 'Content-Type'],
+    cors((req, cb) => {
+      const origin = req.headers.origin;
+      const host = req.headers.host;
+      // When one container serves both the API and the SPA, the browser sends
+      // the app's own origin on state-changing requests. That is same-origin
+      // and must be allowed — otherwise every POST from the deployed app is
+      // rejected. We also never throw here: a disallowed origin simply gets no
+      // CORS headers (and the browser blocks it) rather than a 500.
+      let sameOrigin = false;
+      if (origin && host) {
+        try {
+          sameOrigin = new URL(origin).host === host;
+        } catch {
+          sameOrigin = false;
+        }
+      }
+      const allowed = !origin || sameOrigin || allowedOrigins.includes(origin);
+      cb(null, {
+        origin: allowed ? (origin ?? true) : false,
+        credentials: true,
+        methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Authorization', 'Content-Type'],
+      });
     }),
   );
 

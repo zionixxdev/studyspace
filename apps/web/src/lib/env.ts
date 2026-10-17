@@ -43,5 +43,9 @@ export const isConfigured = parsed.success;
  * would fail.
  */
 export const runtimeFeatures = {
+  db: runtime?.features?.db ?? true,
   drive: runtime?.features?.drive ?? true,
 };
+
+/** True when the API answered with config (so the fix is server-side env vars). */
+export const configCameFromApi = runtime?.loadedFromApi === true;

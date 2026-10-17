@@ -1,5 +1,5 @@
 import { createApp } from './app.js';
-import { env, driveConfigured } from './config/env.js';
+import { env, driveConfigured, dbConfigured } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { getRootFolderId } from './services/google-drive/client.js';
 
@@ -11,6 +11,13 @@ import { getRootFolderId } from './services/google-drive/client.js';
  */
 async function main() {
   const app = createApp();
+
+  if (!dbConfigured) {
+    logger.error(
+      'Supabase is NOT configured — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY. ' +
+        'The server will start and serve a setup screen, but nothing will work.',
+    );
+  }
 
   if (driveConfigured) {
     try {
