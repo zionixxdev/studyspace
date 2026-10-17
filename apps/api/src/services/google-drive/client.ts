@@ -1,7 +1,8 @@
 import { Readable } from 'node:stream';
 import { google } from 'googleapis';
-import { env } from '../../config/env.js';
+import { env, driveConfigured } from '../../config/env.js';
 import { logger } from '../../lib/logger.js';
+import { ApiError } from '../../utils/errors.js';
 import { mapDriveError } from './errors.js';
 
 /**
@@ -13,28 +14,41 @@ import { mapDriveError } from './errors.js';
  * authorization service before any Drive call is made.
  *
  * Credentials: an OAuth2 client built from a long-lived refresh token held in a
- * server-side secret. The token is refreshed transparently by google-auth.
+ * server-side secret. The client is built lazily so the server can start (and
+ * serve the app) before Drive has been configured.
  */
-const oauth2 = new google.auth.OAuth2(
-  env.GOOGLE_CLIENT_ID,
-  env.GOOGLE_CLIENT_SECRET,
-  env.GOOGLE_REDIRECT_URI,
-);
-oauth2.setCredentials({ refresh_token: env.GOOGLE_REFRESH_TOKEN });
+type Drive = ReturnType<typeof google.drive>;
+let cachedDrive: Drive | null = null;
 
-const drive = google.drive({ version: 'v3', auth: oauth2 });
+function getDrive(): Drive {
+  if (!driveConfigured) {
+    throw new ApiError(
+      503,
+      'drive_not_configured',
+      'Google Drive is not configured on this server yet. The owner must add the Drive credentials.',
+    );
+  }
+  if (cachedDrive) return cachedDrive;
+
+  const oauth2 = new google.auth.OAuth2(
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_CLIENT_SECRET,
+    env.GOOGLE_REDIRECT_URI,
+  );
+  oauth2.setCredentials({ refresh_token: env.GOOGLE_REFRESH_TOKEN });
+  cachedDrive = google.drive({ version: 'v3', auth: oauth2 });
+  return cachedDrive;
+}
 
 /** The folder that holds every uploaded file. Created on first use if absent. */
 let cachedRootId: string | null = env.GOOGLE_DRIVE_ROOT_FOLDER_ID || null;
 
 export async function getRootFolderId(): Promise<string> {
   if (cachedRootId) return cachedRootId;
+  const drive = getDrive();
   try {
     const created = await drive.files.create({
-      requestBody: {
-        name: 'StudySpace',
-        mimeType: 'application/vnd.google-apps.folder',
-      },
+      requestBody: { name: 'StudySpace', mimeType: 'application/vnd.google-apps.folder' },
       fields: 'id',
     });
     cachedRootId = created.data.id ?? null;
@@ -60,6 +74,7 @@ export async function uploadStream(params: {
   name: string;
   mime: string;
 }): Promise<UploadResult> {
+  const drive = getDrive();
   const parent = await getRootFolderId();
   try {
     const res = await drive.files.create({
@@ -75,6 +90,7 @@ export async function uploadStream(params: {
 }
 
 export async function downloadStream(driveFileId: string): Promise<Readable> {
+  const drive = getDrive();
   try {
     const res = await drive.files.get(
       { fileId: driveFileId, alt: 'media' },
@@ -86,7 +102,10 @@ export async function downloadStream(driveFileId: string): Promise<Readable> {
   }
 }
 
-export async function getFileMeta(driveFileId: string): Promise<{ id: string; name: string; mimeType: string; size: number }> {
+export async function getFileMeta(
+  driveFileId: string,
+): Promise<{ id: string; name: string; mimeType: string; size: number }> {
+  const drive = getDrive();
   try {
     const res = await drive.files.get({
       fileId: driveFileId,
@@ -105,6 +124,7 @@ export async function getFileMeta(driveFileId: string): Promise<{ id: string; na
 }
 
 export async function renameFile(driveFileId: string, name: string): Promise<void> {
+  const drive = getDrive();
   try {
     await drive.files.update({ fileId: driveFileId, requestBody: { name } });
   } catch (err) {
@@ -114,6 +134,7 @@ export async function renameFile(driveFileId: string, name: string): Promise<voi
 
 /** Permanently removes a file from Drive (used on delete / account cleanup). */
 export async function deleteFile(driveFileId: string): Promise<void> {
+  const drive = getDrive();
   try {
     await drive.files.delete({ fileId: driveFileId });
   } catch (err) {
@@ -130,6 +151,7 @@ export async function deleteFile(driveFileId: string): Promise<void> {
  * Supabase, this is the hard ceiling.
  */
 export async function getStorageQuota(): Promise<{ limit: number | null; usage: number | null }> {
+  const drive = getDrive();
   try {
     const res = await drive.about.get({ fields: 'storageQuota' });
     return {
@@ -146,6 +168,11 @@ export async function getStorageQuota(): Promise<{ limit: number | null; usage: 
  * is an offline setup step, not something the app performs at runtime.
  */
 export function buildOwnerConsentUrl(): string {
+  const oauth2 = new google.auth.OAuth2(
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_CLIENT_SECRET,
+    env.GOOGLE_REDIRECT_URI,
+  );
   return oauth2.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',

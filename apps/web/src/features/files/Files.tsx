@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/Feedback';
 import { formatBytes, timeAgo } from '@/lib/utils';
 import { ALLOWED_DOCUMENT_MIME, LIMITS, type DriveFile } from '@studyspace/shared';
+import { runtimeFeatures } from '@/lib/env';
 
 interface StorageInfo {
   usedBytes: number;
@@ -66,7 +67,12 @@ export default function Files() {
     <div className="mx-auto max-w-4xl space-y-4">
       <header className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Files</h1>
-        <Button size="sm" onClick={() => inputRef.current?.click()} loading={upload.isPending}>
+        <Button
+          size="sm"
+          onClick={() => inputRef.current?.click()}
+          loading={upload.isPending}
+          disabled={!runtimeFeatures.drive}
+        >
           <Upload className="h-4 w-4" aria-hidden="true" /> Upload
         </Button>
         <input
@@ -81,6 +87,13 @@ export default function Files() {
           }}
         />
       </header>
+
+      {!runtimeFeatures.drive && (
+        <div role="status" className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
+          Google Drive is not configured on the server yet, so uploads and sharing are
+          disabled. The app owner needs to add the Drive credentials.
+        </div>
+      )}
 
       <Card>
         <CardBody className="pt-4">

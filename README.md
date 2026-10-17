@@ -185,7 +185,15 @@ control matrix, secret management and the account-deletion policy.
 
 ## Deployment
 
-See **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+StudySpace ships as a **single container** that serves both the API and the
+built frontend — one image, one URL, no CORS. Build it with the root
+`Dockerfile`, or split the two (static frontend + API elsewhere).
+
+The frontend reads its Supabase config from `GET /api/v1/config` at runtime, so
+no secrets are baked into the image and the same build works everywhere.
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the AntiDeploy walkthrough and the
+required environment variables.
 
 ## License
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { generalLimiter } from '../middleware/rateLimit.js';
 import { healthRouter } from './health.js';
+import { configRouter } from './config.js';
 import { meRouter } from './me.js';
 import { filesRouter } from './files.js';
 import { conversationsRouter } from './conversations.js';
@@ -18,6 +19,7 @@ apiRouter.use(generalLimiter);
 
 // Health is also mounted at the root (see app.ts) so uptime checks are cheap.
 apiRouter.use(healthRouter);
+apiRouter.use(configRouter);
 apiRouter.use(meRouter);
 apiRouter.use(filesRouter);
 apiRouter.use(conversationsRouter);

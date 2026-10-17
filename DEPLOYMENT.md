@@ -1,98 +1,84 @@
 # Deployment
 
-StudySpace has two deployable pieces: the **static web app** and the **API**
-(which needs a persistent Node process and outbound HTTPS to Google). They can
-live on the same platform or different ones.
+StudySpace ships as a **single container** that serves both the API and the
+built frontend. One image, one URL, no CORS to configure. It can also be split
+(static frontend + API elsewhere) — see [Splitting the two](#splitting-the-two).
 
-## 1. Verify the hosting platform first
+## Deploying to AntiDeploy
 
-Before choosing an architecture, confirm what the target actually supports. The
-original brief named **AntiDeploy**; verify its current capabilities rather than
-assuming them:
+AntiDeploy builds anything with a Dockerfile, and this repo has one at the root.
+The important thing to understand first:
 
-- [ ] Static Vite frontend hosting
-- [ ] Node.js process execution (persistent)
-- [ ] Environment variables / server secrets
-- [ ] HTTPS on a custom domain
-- [ ] SPA fallback (all routes → `index.html`)
-- [ ] Request body size and execution time limits (affects uploads)
-- [ ] Outbound HTTPS to `googleapis.com`
-- [ ] Scheduled/background jobs
+> **AntiDeploy reads your repository's default branch.** If the code is still on
+> a feature branch, the platform sees an empty repo and reports
+> *"We couldn't identify what this is"* with *0 files read*. Merge the branch
+> into `main` first.
 
-**Do not assume that a successful frontend deploy means the backend works.**
-If the platform is static-only, deploy the API elsewhere (see below).
+### Steps
 
-## 2. Frontend
+1. **Merge the scaffold into `main`.** AntiDeploy builds from `main`.
+2. **Create the app** and point it at `zionixxdev/studyspace`. It will detect the
+   `Dockerfile` and build it.
+3. **Skip AntiDeploy's database step.** StudySpace's database is Supabase, not a
+   local one — AntiDeploy's "create your tables" step is not needed. Apply the
+   schema to Supabase instead (`docs/SETUP.md`).
+4. **Set these environment variables** in the AntiDeploy dashboard:
+
+   | Variable | Required | Notes |
+   | --- | --- | --- |
+   | `SUPABASE_URL` | **yes** | `https://<ref>.supabase.co` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | **yes** | secret; server-only |
+   | `SUPABASE_ANON_KEY` | **yes** | public; served to the browser |
+   | `PORT` | usually set by the platform | the app reads it automatically |
+   | `GOOGLE_CLIENT_ID` | for files | |
+   | `GOOGLE_CLIENT_SECRET` | for files | secret |
+   | `GOOGLE_REDIRECT_URI` | for files | the deployed callback URL |
+   | `GOOGLE_REFRESH_TOKEN` | for files | secret; mint once, see `docs/SETUP.md` |
+   | `GOOGLE_DRIVE_ROOT_FOLDER_ID` | for files | |
+
+   The server **starts without** the Google variables — it just disables uploads
+   and sharing, and the Files screen says so plainly rather than offering a
+   button that fails. Add them when you have completed the Drive setup.
+
+5. **Set the health check path** to `/api/health`. The container also declares a
+   `HEALTHCHECK`, but the platform's own check is what gates the deploy.
+6. **Point Supabase Auth at your URL.** In Supabase → Authentication → URL
+   Configuration, set the Site URL and redirect URLs to the deployed origin, so
+   confirmation and password-reset links come back to the right place.
+7. **Smoke-test** using the checklist at the bottom of this file.
+
+### Why no build-time secrets
+
+The frontend reads its Supabase configuration from `GET /api/v1/config` at
+runtime rather than from `VITE_*` variables compiled into the bundle. That means
+the same image works in every environment, and changing a key never requires a
+rebuild. `VITE_*` values still work as a fallback for static-only hosting.
+
+## Splitting the two
+
+If you would rather host the frontend statically (CDN) and the API separately:
 
 ```bash
 npm ci
-npm run build:web        # → apps/web/dist
+npm run build:web     # → apps/web/dist   (deploy as static, SPA fallback on)
+npm run build:api     # → apps/api/dist   (run: node apps/api/dist/index.js)
 ```
 
-Set the build-time variables:
+Then set `VITE_API_BASE_URL=https://api.your-domain.example/api/v1` at web build
+time, set `ALLOWED_ORIGINS` on the API to the exact frontend origin, and set
+`SERVE_WEB_DIR` to nothing so the API does not try to serve a frontend it does
+not have.
 
-```
-VITE_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
-VITE_SUPABASE_ANON_KEY=...
-VITE_API_BASE_URL=https://api.your-domain.example/api/v1
-```
+## Environment variables (full list)
 
-Configure an SPA fallback so deep links (`/messages/123`) serve `index.html`.
-The service worker caches **static assets only** — never API responses,
-messages, signed URLs or PDFs.
+See `.env.example`. Required to boot: `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`. Required for the browser to authenticate:
+`SUPABASE_ANON_KEY`. Everything else is optional or Drive-related.
 
-## 3. Backend
+The API validates its environment at boot and exits with a message naming the
+missing variable, so a misconfiguration fails loudly rather than silently.
 
-```bash
-npm ci
-npm run build:api        # → apps/api/dist
-node apps/api/dist/index.js
-```
-
-Required secrets (see `.env.example`): `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-`GOOGLE_REDIRECT_URI`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_DRIVE_ROOT_FOLDER_ID`,
-`FRONTEND_ORIGIN`, `ALLOWED_ORIGINS`, `PORT`.
-
-Good fits for the API on a free tier: Fly.io, Render, Railway or Cloudflare
-Workers (with a Node compatibility layer). Each has different cold-start and
-body-size behaviour — check upload limits against `LIMITS.MAX_FILE_BYTES`.
-
-### Health checks
-
-- `GET /api/health` — liveness (cheap)
-- `GET /api/health/ready` — readiness (verifies the database)
-
-Point the platform's health check at `/api/health`.
-
-## 4. Supabase
-
-```bash
-supabase link --project-ref YOUR-REF
-supabase db push
-```
-
-Then set the Auth **Site URL** and redirect URLs to the deployed frontend origin
-so confirmation and reset links point at the right place.
-
-## 5. Google OAuth redirects
-
-Add the production callback to the OAuth client's authorised redirect URIs:
-
-```
-https://api.your-domain.example/api/v1/oauth/google/callback
-```
-
-The refresh token itself is portable across environments — you do **not** need
-to re-consent unless the owner revokes access.
-
-## 6. CORS
-
-Set `ALLOWED_ORIGINS` to the exact frontend origin(s), comma-separated, no
-trailing slash. A mismatch produces a browser CORS error even when the API is
-healthy.
-
-## 7. Storage quotas
+## Storage quotas
 
 The central Drive account's quota is a hard ceiling shared with the owner's other
 Google storage. StudySpace tracks per-user usage in Supabase and returns
@@ -100,29 +86,31 @@ Google storage. StudySpace tracks per-user usage in Supabase and returns
 failing silently. Monitor usage and raise `LIMITS.PER_USER_STORAGE_BYTES` only
 after checking the account's real headroom.
 
-## 8. Post-deploy smoke test
+## Rollback
+
+- **App** — redeploy the previous image/revision from the platform.
+- **Database** — migrations are forward-only by convention. For a bad migration,
+  ship a compensating migration rather than a destructive down-migration; keep a
+  recent `supabase db dump` before applying schema changes.
+
+## Post-deploy smoke test
 
 1. `GET /api/health` returns `{"status":"ok"}`.
 2. `GET /api/health/ready` returns `{"status":"ready"}`.
-3. Register a throwaway account and sign in.
-4. Upload a small PDF; confirm the row reaches `upload_state = completed`.
-5. Share it with a second account; confirm the second account can download it.
-6. Confirm a **third** account gets `403` for the same file id.
-7. Open the PDF, add an annotation, reload, and confirm it persists.
-8. Confirm the app installs as a PWA and the offline page appears with the
-   network off.
-
-## 9. Rollback
-
-- **Frontend** — redeploy the previous build (platform-specific "rollback").
-- **API** — redeploy the previous image/revision.
-- **Database** — migrations are forward-only by convention. For a bad migration,
-  ship a compensating migration rather than a destructive down-migration; keep a
-  recent logical backup (`supabase db dump`) before applying schema changes.
+3. `GET /api/v1/config` returns your Supabase URL and `features.drive`.
+4. The app loads at `/` and shows the login screen (not the setup screen).
+5. Register a throwaway account and sign in.
+6. Upload a small PDF; confirm the row reaches `upload_state = completed`.
+7. Share it with a second account; confirm the second account can download it.
+8. Confirm a **third** account gets `403` for the same file id — this is the
+   check that proves the access-control model actually holds.
+9. Open the PDF, add an annotation, reload, and confirm it persists.
+10. Confirm the app installs as a PWA and the offline page appears with the
+    network off.
 
 ## Free-tier reality check
 
 This stack runs on free tiers, but "free" is not "unlimited". Supabase projects
 pause after inactivity and have row/bandwidth caps; the central Drive account's
-15 GB is shared with the owner's other Google data; the API host may cold-start.
+15 GB is shared with the owner's other Google data; the container may cold-start.
 Review current limits before promising a zero-cost, always-on deployment.
