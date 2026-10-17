@@ -112,6 +112,9 @@ cp .env.example .env.local        # frontend values
 cp .env.example apps/api/.env     # backend values (fill the secrets)
 ```
 
+After the first install, **commit `package-lock.json`** so CI can switch from
+`npm install` to the faster, reproducible `npm ci`.
+
 Then follow **[docs/SETUP.md](docs/SETUP.md)** to create the Supabase schema and
 mint the Google Drive refresh token.
 
