@@ -1,0 +1,24 @@
+# Never ship these into the image.
+node_modules
+**/node_modules
+
+# Build output is produced inside the image, not copied in.
+dist
+**/dist
+**/*.tsbuildinfo
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# VCS / editor / docs / tests
+.git
+.gitignore
+.github
+.vscode
+.idea
+coverage
+playwright-report
+test-results
+**/*.log
