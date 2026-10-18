@@ -1,5 +1,5 @@
 import { createApp } from './app.js';
-import { env, driveConfigured, dbConfigured } from './config/env.js';
+import { env, driveConfigured, dbConfigured, placeholderVars } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { getRootFolderId } from './services/google-drive/client.js';
 
@@ -11,6 +11,14 @@ import { getRootFolderId } from './services/google-drive/client.js';
  */
 async function main() {
   const app = createApp();
+
+  if (placeholderVars.length > 0) {
+    logger.error(
+      { vars: placeholderVars },
+      'These variables still hold placeholder values from .env.example and are being ignored. ' +
+        'Replace them with real values.',
+    );
+  }
 
   if (!dbConfigured) {
     logger.error(

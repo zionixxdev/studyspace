@@ -5,15 +5,21 @@ import { pinoHttp } from 'pino-http';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
-import { allowedOrigins, isProd } from './config/env.js';
+import { allowedOrigins, isProd, env, isPlaceholder } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { apiRouter } from './routes/index.js';
 import { healthRouter } from './routes/health.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
-/** The built SPA, when this process also serves the frontend. */
+/**
+ * The built SPA, when this process also serves the frontend. A placeholder
+ * value (hosting dashboards offer the literal "value") is ignored so static
+ * serving is not silently broken.
+ */
 function webDir(): string {
-  return process.env.SERVE_WEB_DIR ?? resolve(fileURLToPath(new URL('../../web/dist', import.meta.url)));
+  const configured = env.SERVE_WEB_DIR;
+  if (configured && !isPlaceholder(configured)) return configured;
+  return resolve(fileURLToPath(new URL('../../web/dist', import.meta.url)));
 }
 
 export function createApp() {
