@@ -47,6 +47,35 @@ The important thing to understand first:
    confirmation and password-reset links come back to the right place.
 7. **Smoke-test** using the checklist at the bottom of this file.
 
+### Which variables to set (and which to leave blank)
+
+Hosting dashboards read `.env.example` and offer its **placeholder** values as
+defaults. Setting those verbatim is worse than leaving them empty:
+`https://YOUR-PROJECT-REF.supabase.co` is a valid URL, so it passes validation
+and leaves the app looking configured while failing at runtime. The server
+detects `.env.example` placeholders, ignores them, and logs which ones it saw —
+but it is simpler to just not set them.
+
+**Set these three, with real values from your Supabase project:**
+
+| Variable | Where to find it |
+| --- | --- |
+| `SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API → `service_role` (secret) |
+| `SUPABASE_ANON_KEY` | Supabase → Project Settings → API → `anon` `public` |
+
+**Leave these blank:**
+
+| Variable | Why |
+| --- | --- |
+| `SERVE_WEB_DIR` | The default already points at the built SPA inside the image. |
+| `FRONTEND_ORIGIN`, `ALLOWED_ORIGINS` | One container serves both API and SPA, so requests are same-origin and allowed automatically. Only needed if you split the two. |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL` | Build-time only, and the SPA gets its config from `GET /api/v1/config` at runtime. Setting them at runtime does nothing. |
+| `E2E_BASE_URL` | Playwright tests only. |
+| `GOOGLE_*` | Add later, once you have done the Drive OAuth setup. The app runs without them; file features stay disabled with a visible message. |
+
+`NODE_ENV` and `PORT` are set by the platform for you.
+
 ### The two warnings AntiDeploy raises
 
 **"Data loss: Uploaded files will be lost."** — Not applicable here. StudySpace

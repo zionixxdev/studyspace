@@ -48,16 +48,55 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 
-/** True when the database credentials are present. */
-export const dbConfigured = Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+/**
+ * Detects values copied verbatim from `.env.example`.
+ *
+ * Hosting dashboards read that file and offer its placeholder values as
+ * defaults. `https://YOUR-PROJECT-REF.supabase.co` is a *syntactically valid*
+ * URL, so it would sail past validation and leave the app looking configured
+ * while failing at runtime with confusing errors. Treating placeholders as
+ * "not set" turns that into an honest "not configured" state instead.
+ */
+const PLACEHOLDER = [
+  /^YOUR[-_]/i,
+  /^value$/i,
+  /YOUR-PROJECT-REF/i,
+  /example\.supabase\.co/i,
+  /^(changeme|todo|xxx+)$/i,
+];
+
+export function isPlaceholder(value: string | undefined | null): boolean {
+  if (!value) return true;
+  const v = value.trim();
+  return PLACEHOLDER.some((re) => re.test(v));
+}
+
+/** True when real database credentials are present. */
+export const dbConfigured =
+  Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) &&
+  !isPlaceholder(env.SUPABASE_URL) &&
+  !isPlaceholder(env.SUPABASE_SERVICE_ROLE_KEY);
 
 /** True when all Google Drive credentials are present. */
-export const driveConfigured = Boolean(
-  env.GOOGLE_CLIENT_ID &&
-    env.GOOGLE_CLIENT_SECRET &&
-    env.GOOGLE_REFRESH_TOKEN &&
-    env.GOOGLE_REDIRECT_URI,
-);
+export const driveConfigured =
+  Boolean(
+    env.GOOGLE_CLIENT_ID &&
+      env.GOOGLE_CLIENT_SECRET &&
+      env.GOOGLE_REFRESH_TOKEN &&
+      env.GOOGLE_REDIRECT_URI,
+  ) &&
+  !isPlaceholder(env.GOOGLE_REFRESH_TOKEN) &&
+  !isPlaceholder(env.GOOGLE_CLIENT_SECRET);
+
+/** Placeholder values that were supplied, for a clear startup warning. */
+export const placeholderVars: string[] = (
+  ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY',
+   'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN',
+   'GOOGLE_DRIVE_ROOT_FOLDER_ID', 'SERVE_WEB_DIR'] as const
+).filter((k) => {
+  const v = (env as Record<string, unknown>)[k];
+  return typeof v === 'string' && v.length > 0 && isPlaceholder(v);
+});
 
 export const allowedOrigins = (env.ALLOWED_ORIGINS ?? env.FRONTEND_ORIGIN)
   .split(',')
