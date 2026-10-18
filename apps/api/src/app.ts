@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
 import { allowedOrigins, isProd, env, isPlaceholder } from './config/env.js';
+import { buildCspDirectives } from './config/csp.js';
 import { logger } from './lib/logger.js';
 import { apiRouter } from './routes/index.js';
 import { healthRouter } from './routes/health.js';
@@ -31,8 +32,12 @@ export function createApp() {
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
-      // The SPA is served from the same origin; allow its own scripts/styles.
-      contentSecurityPolicy: isProd ? undefined : false,
+      // Helmet's default policy has no connect-src, so it falls back to
+      // default-src 'self' and blocks every call the browser makes to Supabase
+      // ("Failed to fetch"). Allow the Supabase origin explicitly.
+      contentSecurityPolicy: isProd
+        ? { useDefaults: false, directives: buildCspDirectives(env.SUPABASE_URL) }
+        : false,
     }),
   );
   app.use(
